@@ -2,12 +2,12 @@
 
 Site: https://graphgiraffe.github.io/playroom-hod-test/
 
-This is the standalone PlayRoom 0.19.5 build with 15 bundled games. The application is encrypted with StatiCrypt 3.5.4; the visitor enters the shared password to decrypt it in the browser. Refresh requires the password again. Existing Cloudflare deployment is unchanged.
+This is the standalone PlayRoom 0.19.5 build with bundled games and a static update catalog. The application is encrypted with StatiCrypt 3.5.4; the visitor enters the shared password to decrypt it in the browser. Successful login is remembered automatically with no expiry, across reloads, browser restarts and site updates. Keep source/salt.txt unchanged. Existing Cloudflare deployment is unchanged.
 
 ## Publish
 
 Run **Actions → Publish encrypted PlayRoom → Run workflow**, branch `main`.
-The workflow decrypts the transport bundle in a temporary directory, verifies its SHA-256, encrypts the entire HTML with `PAGES_SMOKE_PASSWORD`, tests it, and uploads only `site/` to Pages. The temporary plaintext is removed before upload. After deployment the test verifies exact served bytes, wrong-password rejection, correct login, 15 game tiles, Battleship lobby, reload protection and decryption of the already-loaded page while offline. Reports contain no passwords or screenshots of the application.
+The workflow decrypts the transport bundle in a temporary directory, verifies its SHA-256, encrypts the entire HTML with `PAGES_SMOKE_PASSWORD` and stable salt, builds a ciphertext-only offline PWA cache, tests it, and uploads only `site/` to Pages. The temporary plaintext is removed before upload. After deployment the test verifies exact served bytes, wrong-password rejection, correct login, catalog-derived game inventory, automatic remembered login, actual pack reinstall, offline navigation and safe worker activation. Reports contain no passwords or screenshots of the application.
 
 Secrets:
 - `PAGES_SMOKE_PASSWORD`: shared visitor password, maintained by owner. Changing it requires running the workflow again. Prefer a unique randomly generated password of 20+ characters.
@@ -17,14 +17,16 @@ To update the app, from a trusted local checkout with authenticated `gh`:
 
 ```sh
 npm ci --ignore-scripts
-python3 scripts/seal-source.py /path/to/playroom-all-games.html --version 0.19.5
+python3 scripts/seal-source.py /path/to/input.zip --version 0.19.5 --repository GraphGiraffe/playroom-hod-test
 ```
 
-This rotates the transport secret; do not run it while publication is active. Review and commit `source/app.enc` and `source/provenance.json`, push to `main`, then run the workflow. The source bundle must be an approved standalone release. Never add the plaintext HTML to this public repository. Old source commits need their matching transport key, so rollback is performed by resealing the desired original release, not by rerunning old commits after key rotation.
+This rotates the transport secret; do not run it while publication is active. Review and commit `source/app.enc` and `source/provenance.json`, push to `main`, then run the workflow. The private source ZIP contains index.html (standalone app), source sw.js, manifest.webmanifest and icons/*. The app URL-mapping port is derived from the GitHub Pages runtime change; original 0.19.5 release artifacts are not replaced. Never add the plaintext HTML to this public repository. Old source commits need their matching transport key, so rollback is performed by resealing the desired original release, not by rerunning old commits after key rotation.
 
 ## Scope and limits
 
-This is an encrypted standalone mirror, not full parity with the Cloudflare PWA. Automatic remote pack catalog updates, PWA installation/offline reload and network play on this new origin still need integration/acceptance. Loaded HTML can decrypt offline, which does not mean a fresh offline navigation will work. Game saves/settings belong to this origin and are not automatically imported from Cloudflare.
+PWA manifest/install support, encrypted offline reload, remembered login and static pack updates are included. Mobile installation and real cross-device RTC on this origin require user acceptance; they are not proven by desktop smoke. Saves/settings belong to this origin and are not automatically imported from Cloudflare.
+
+Canonical build/test/login helpers live in [utils](https://github.com/GraphGiraffe/boardgame-playroom-utils/tree/main/tools/github-pages). Export with `sync.py SITE`; check with `--check`. Do not edit exported helpers independently. Tool hashes are recorded in scripts/tool-provenance.json. Catalog updates use utils import-packs.py with verified release SHA256SUMS. Existing hashed files remain available. One Pages snapshot includes both shell and catalog; pack-only updates do not require a new app source bundle.
 
 Encryption prevents opening the app without its password, but a password holder can save or share the decrypted app; downloaded copies cannot be revoked. Ciphertext is public and permits offline password guessing. The published Pages artifact is encrypted; source HTML, keys, browser storage and decrypted pages must never be uploaded as CI artifacts.
 
