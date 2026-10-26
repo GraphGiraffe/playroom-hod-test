@@ -1,0 +1,54 @@
+name: Publish encrypted PlayRoom
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright-core install --with-deps chromium
+      - name: Encrypt source with site password
+        run: python3 scripts/build.py
+        env:
+          PAGES_SMOKE_PASSWORD: ${{ secrets.PAGES_SMOKE_PASSWORD }}
+          SOURCE_BUNDLE_KEY: ${{ secrets.SOURCE_BUNDLE_KEY }}
+      - name: Verify encrypted artifact before deployment
+        run: node scripts/smoke.cjs
+        env:
+          PAGES_SMOKE_PASSWORD: ${{ secrets.PAGES_SMOKE_PASSWORD }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4
+        id: deployment
+      - name: Verify published bytes and password login
+        run: node scripts/smoke.cjs
+        env:
+          SITE_URL: ${{ steps.deployment.outputs.page_url }}
+          PAGES_SMOKE_PASSWORD: ${{ secrets.PAGES_SMOKE_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification
+          path: '*-report.json'
+          if-no-files-found: ignore
