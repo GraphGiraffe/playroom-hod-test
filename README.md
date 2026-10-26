@@ -2,7 +2,7 @@
 
 Site: https://graphgiraffe.github.io/playroom-hod-test/
 
-This is the standalone PlayRoom 0.19.6 build with bundled games and a static update catalog. The application is encrypted with StatiCrypt 3.5.4; the visitor enters the shared password to decrypt it in the browser. Successful login is remembered automatically with no expiry, across reloads, browser restarts and site updates. Keep source/salt.txt unchanged. Existing Cloudflare deployment is unchanged.
+This is the standalone PlayRoom 0.19.7 build with bundled games and a static update catalog. The application is encrypted with StatiCrypt 3.5.4; the visitor enters the shared password to decrypt it in the browser. Successful login is remembered automatically with no expiry, across reloads, browser restarts and site updates. Keep source/salt.txt unchanged. Existing Cloudflare deployment is unchanged.
 
 ## Publish
 
@@ -17,10 +17,10 @@ To update the app, from a trusted local checkout with authenticated `gh`:
 
 ```sh
 npm ci --ignore-scripts
-python3 scripts/seal-source.py /path/to/input.zip --version 0.19.6 --repository GraphGiraffe/playroom-hod-test
+python3 scripts/seal-source.py /path/to/input.zip --version 0.19.7 --repository GraphGiraffe/playroom-hod-test
 ```
 
-This rotates the transport secret; do not run it while publication is active. Review and commit `source/app.enc` and `source/provenance.json`, push to `main`, then run the workflow. The private source ZIP contains index.html (standalone app), source sw.js, manifest.webmanifest and icons/*. The app URL-mapping port is derived from the GitHub Pages runtime change; original 0.19.6 release artifacts are not replaced. Never add the plaintext HTML to this public repository. Old source commits need their matching transport key, so rollback is performed by resealing the desired original release, not by rerunning old commits after key rotation.
+This rotates the transport secret; do not run it while publication is active. Review and commit `source/app.enc` and `source/provenance.json`, push to `main`, then run the workflow. The private source ZIP contains index.html (standalone app), source sw.js, manifest.webmanifest and icons/*. The app URL-mapping port is derived from the GitHub Pages runtime change; original 0.19.7 release artifacts are not replaced. Never add the plaintext HTML to this public repository. Old source commits need their matching transport key, so rollback is performed by resealing the desired original release, not by rerunning old commits after key rotation.
 
 ## Scope and limits
 

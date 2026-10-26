@@ -33,7 +33,7 @@ const digest=b=>crypto.createHash('sha256').update(b).digest('hex');
   await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
   const catalog=await page.evaluate(async()=>await PlayroomRemotePacks.refresh());assert.deepEqual(catalog.packs,expected);
   for(const item of expected){const r=await ctx.request.get(new URL('./api/packs/'+item.url.slice('/api/packs/'.length),url).href);assert.equal(r.status(),200);assert.equal(digest(await r.body()),item.sha256);}
-  await page.evaluate(async()=>{const c=PlayroomRemotePacks.current.packs[0];PlayroomPacks.remove(c.id,c.version);await PlayroomRemotePacks.install(c.id,{activate:true});});
+  await page.evaluate(async()=>{const c=PlayroomRemotePacks.current.packs[0];await PlayroomPacks.remove(c.id,c.version);await PlayroomRemotePacks.install(c.id,{activate:true});});
   report.checks.push('Catalog refresh, all file hashes, actual pack removal and reinstall');
   await page.reload();await page.locator('.game-tile').first().waitFor();assert.equal(await page.locator('#staticrypt-password').count(),0);
   const state=await ctx.storageState();assert(state.origins.some(o=>o.localStorage.some(i=>i.name.endsWith(':key')&&i.value!==password)));
