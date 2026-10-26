@@ -1,19 +1,42 @@
-import hashlib, json, os, pathlib, subprocess, tempfile
+"""Build an encrypted static PWA; never publish source or a decrypted cache."""
+import hashlib, json, os, pathlib, re, shutil, subprocess, tempfile, zipfile
 root = pathlib.Path(__file__).resolve().parents[1]
 os.chdir(root)
 password = os.environ.get('PAGES_SMOKE_PASSWORD', '')
-assert password, 'Missing PAGES_SMOKE_PASSWORD'
-assert os.environ.get('SOURCE_BUNDLE_KEY'), 'Missing SOURCE_BUNDLE_KEY'
+assert password and os.environ.get('SOURCE_BUNDLE_KEY'), 'Missing build secret'
 meta = json.loads((root/'source/provenance.json').read_text())
 site = root/'site'
-site.mkdir(exist_ok=True)
-assert set(p.name for p in site.iterdir()) <= {'index.html', '.nojekyll'}, 'Unexpected public files'
+if site.exists(): shutil.rmtree(site)
+site.mkdir()
 with tempfile.TemporaryDirectory() as td:
-    source = pathlib.Path(td)/'index.html'
-    subprocess.run(['openssl','enc','-d','-aes-256-cbc','-pbkdf2','-iter','200000','-in','source/app.enc','-out',str(source),'-pass','env:SOURCE_BUNDLE_KEY'],check=True)
-    assert hashlib.sha256(source.read_bytes()).hexdigest()==meta['sha256'], 'Source integrity mismatch'
-    subprocess.run([str(root/'node_modules/.bin/staticrypt'),str(source),'-d',str(site),'-c','false','--remember','false','--template-title','PlayRoom','--template-button','Войти','--template-placeholder','Пароль','--template-error','Неверный пароль','--template-instructions','Введите пароль, который вам передал владелец сайта.','--template-color-primary','#366653','--template-color-secondary','#f4f0e5'],env={**os.environ,'STATICRYPT_PASSWORD':password},check=True,stdout=subprocess.DEVNULL)
+    archive = pathlib.Path(td)/'input.zip'
+    subprocess.run(['openssl','enc','-d','-aes-256-cbc','-pbkdf2','-iter','200000','-in','source/app.enc','-out',str(archive),'-pass','env:SOURCE_BUNDLE_KEY'],check=True)
+    assert hashlib.sha256(archive.read_bytes()).hexdigest()==meta['sha256'], 'Source integrity mismatch'
+    with zipfile.ZipFile(archive) as z:
+        document=z.read('index.html').decode()
+        worker=z.read('sw.js').decode()
+        for name in z.namelist():
+            if name=='manifest.webmanifest' or re.fullmatch(r'icons/[A-Za-z0-9_.-]+',name):
+                dest=site/name;dest.parent.mkdir(exist_ok=True);dest.write_bytes(z.read(name))
+    deployment='<script>globalThis.PlayroomDeployment={catalogBasePath:new URL("./api/packs/",location.href).pathname};</script>'
+    document=document.replace('<head>','<head>'+deployment+'<link rel="manifest" href="./manifest.webmanifest">',1)
+    source=pathlib.Path(td)/'index.html';source.write_text(document)
+    subprocess.run([str(root/'node_modules/.bin/staticrypt'),str(source),'-d',str(site),'-c','false','--salt',(root/'source/salt.txt').read_text().strip(),'--remember','0','--template',str(root/'scripts/password-template.html'),'--template-title','ХОД','--template-button','Войти','--template-placeholder','Пароль','--template-error','Неверный пароль','--template-instructions','Настольные игры для своей компании. Введите пароль — на этом устройстве вход сохранится.'],env={**os.environ,'STATICRYPT_PASSWORD':password},check=True,stdout=subprocess.DEVNULL)
+shutil.copytree(root/'public',site,dirs_exist_ok=True)
 (site/'.nojekyll').touch()
 html=(site/'index.html').read_text()
 assert password not in html and 'class="game-tile' not in html
-print('Encrypted app',meta['version'],'ready; plaintext was removed')
+# The existing worker owns update coordination. Only shell inventory and scope change.
+paths=['./index.html','./manifest.webmanifest']+['./'+p.relative_to(site).as_posix() for p in sorted((site/'icons').iterdir())]
+hashes={p:hashlib.sha256((site/p[2:]).read_bytes()).hexdigest() for p in paths}
+identity=hashlib.sha256(json.dumps(hashes,sort_keys=True).encode()).hexdigest()[:16]
+worker=re.sub(r"const CACHE='[^']+';", "const CACHE='playroom-pages-'+new URL('./',self.location.href).pathname+'-"+identity+"';",worker,count=1)
+worker=worker.replace('const INTEGRITY=null;', 'const INTEGRITY='+json.dumps(hashes)+';')
+worker=re.sub(r'const CORE=\[.*?\];','const CORE='+json.dumps(paths)+';',worker,count=1,flags=re.S)
+worker=worker.replace("key.startsWith('playroom-pwa-')", "key.startsWith('playroom-pages-'+new URL('./',self.location.href).pathname+'-')")
+worker=worker.replace("url.pathname.startsWith('/api/packs/')", "url.pathname.startsWith(new URL('./api/packs/',self.location.href).pathname)")
+# Do not retain random same-origin URLs in the shell cache.
+worker=worker.replace("  if(event.request.mode==='navigate'){", "  if(event.request.mode!=='navigate'&&!CORE.some(p=>new URL(p,self.location.href).href===url.href))return;\n  if(event.request.mode==='navigate'){")
+(site/'sw.js').write_text(worker)
+(site/'build-info.json').write_text(json.dumps({'app':meta,'shell':identity,'packs':json.loads((site/'api/packs/catalog').read_text())},ensure_ascii=False))
+print('Encrypted PWA ready:',meta['version'],identity)
