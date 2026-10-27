@@ -7,7 +7,7 @@ This is the standalone PlayRoom 0.19.9 build with bundled games and a static upd
 ## Publish
 
 Run **Actions → Publish encrypted PlayRoom → Run workflow**, branch `main`.
-The workflow decrypts the transport bundle in a temporary directory, verifies its SHA-256, encrypts the entire HTML with `PAGES_SMOKE_PASSWORD` and stable salt, builds a offline PWA cache that stores verified plaintext after first login, tests it, and uploads only `site/` to Pages. The temporary plaintext is removed before upload. After deployment the test verifies exact served bytes, wrong-password rejection, correct login, catalog-derived game inventory, automatic remembered login, actual pack reinstall, offline navigation and safe worker activation. Reports contain no passwords or screenshots of the application.
+The workflow only builds and publishes: it decrypts the transport bundle in a temporary directory, verifies its input SHA-256, encrypts HTML with `PAGES_SMOKE_PASSWORD` and the stable salt, and uploads only `site/` to Pages. Temporary plaintext is removed before upload. GitHub Actions runs no tests and installs no browser while CI quotas are constrained. Run browser smoke locally with throwaway test secrets; verify public deployment metadata locally after publication. Never retrieve production secrets for testing.
 
 Secrets:
 - `PAGES_SMOKE_PASSWORD`: shared visitor password, maintained by owner. Changing it requires running the workflow again. Prefer a unique randomly generated password of 20+ characters.
@@ -32,7 +32,7 @@ Encryption prevents opening the app without its password, but a password holder 
 
 ## Repository policy
 
-This repository is a distribution mirror. Initial bootstrap is on `main`; subsequent code/tooling changes use task branches and reviewed PRs into `main`. Publication is manual only, with one workflow and one Pages concurrency group. No automatic push/PR deploys. Focused checks: Python syntax, Node syntax, `git diff --check`, artifact browser smoke, then published-site smoke. Failed verification must be investigated; do not report a successful site solely because the deployment step passed.
+This repository is a distribution mirror. Initial bootstrap is on `main`; subsequent code/tooling changes use task branches and reviewed PRs into `main`. Publication is manual only, with one workflow and one Pages concurrency group. No automatic push/PR deploys. Local-only checks: Python syntax, Node syntax, `git diff --check`, artifact browser smoke, then published-site smoke. Failed verification must be investigated; do not report a successful site solely because the deployment step passed.
 
 [StatiCrypt](https://github.com/robinmoisson/staticrypt) · [GitHub Pages workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
 
