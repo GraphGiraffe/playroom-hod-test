@@ -16,7 +16,7 @@ with tempfile.TemporaryDirectory() as td:
         document=z.read('index.html').decode()
         worker=z.read('sw.js').decode()
         for name in z.namelist():
-            if name=='manifest.webmanifest' or re.fullmatch(r'icons/[A-Za-z0-9_.-]+',name):
+            if name in {'manifest.webmanifest','LICENSE','LICENSING.md','COPYRIGHT'} or re.fullmatch(r'(?:icons/[A-Za-z0-9_.-]+|LICENSES/[A-Za-z0-9_.-]+)',name):
                 dest=site/name;dest.parent.mkdir(exist_ok=True);dest.write_bytes(z.read(name))
     deployment='<script>globalThis.PlayroomDeployment={catalogBasePath:new URL("./api/packs/",location.href).pathname};</script>'
     document=document.replace('<head>','<head>'+deployment+'<link rel="manifest" href="./manifest.webmanifest">',1)
