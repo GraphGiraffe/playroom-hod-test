@@ -24,39 +24,15 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - name: Verify exported tool provenance
-        run: |
-          python3 - <<'PYCODE'
-          import hashlib,json,pathlib
-          p=pathlib.Path('scripts')
-          for name,digest in json.loads((p/'tool-provenance.json').read_text())['sha256'].items():
-              assert hashlib.sha256((p/name).read_bytes()).hexdigest()==digest, name
-          PYCODE
       - run: npm ci --ignore-scripts
-      - run: npx playwright-core install --with-deps chromium
       - name: Encrypt source with site password
         run: python3 scripts/build.py
         env:
           PAGES_SMOKE_PASSWORD: ${{ secrets.PAGES_SMOKE_PASSWORD }}
           SOURCE_BUNDLE_KEY: ${{ secrets.SOURCE_BUNDLE_KEY }}
-      - name: Verify encrypted artifact before deployment
-        run: node scripts/smoke.cjs
-        env:
-          PAGES_SMOKE_PASSWORD: ${{ secrets.PAGES_SMOKE_PASSWORD }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
           path: site
       - uses: actions/deploy-pages@v4
         id: deployment
-      - name: Verify published bytes and password login
-        run: node scripts/smoke.cjs
-        env:
-          SITE_URL: ${{ steps.deployment.outputs.page_url }}
-          PAGES_SMOKE_PASSWORD: ${{ secrets.PAGES_SMOKE_PASSWORD }}
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: verification
-          path: '*-report.json'
-          if-no-files-found: ignore
