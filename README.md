@@ -37,3 +37,8 @@ This repository is a distribution mirror. Initial bootstrap is on `main`; subseq
 [StatiCrypt](https://github.com/robinmoisson/staticrypt) · [GitHub Pages workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
 
 After first login, the worker verifies the decrypted HTML against the build SHA-256 and replaces the encrypted HTML cache entry under the same key. Installed navigation is cache-first and does not wait for the network. The public deployment remains encrypted; the browser-local copy is intentionally unencrypted. New builds decrypt once using the remembered key. If persistence fails, login still works and later visits can retry.
+
+
+## License / Лицензирование
+
+Собственный код — **PolyForm Noncommercial 1.0.0**; собственные обычные арты, звуки и документация — **CC BY-NC-SA 4.0**. Стихийная потасовка имеет отдельные **PolyForm Strict / CC BY-NC-ND** условия. Сторонние материалы сохраняют свои лицензии. Области действия и исключения: [LICENSING.md](LICENSING.md); стандартные тексты: [LICENSE](LICENSE), [LICENSES](LICENSES/).
