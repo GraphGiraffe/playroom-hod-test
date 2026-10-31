@@ -16,8 +16,8 @@ with tempfile.TemporaryDirectory() as td:
         document=z.read('index.html').decode()
         worker=z.read('sw.js').decode()
         for name in z.namelist():
-            if name in {'manifest.webmanifest','LICENSE','LICENSING.md','COPYRIGHT'} or re.fullmatch(r'(?:icons/[A-Za-z0-9_.-]+|LICENSES/[A-Za-z0-9_.-]+)',name):
-                dest=site/name;dest.parent.mkdir(exist_ok=True);dest.write_bytes(z.read(name))
+            if name in {'manifest.webmanifest','LICENSE','LICENSING.md','COPYRIGHT','platform/web/push-worker.js'} or re.fullmatch(r'(?:icons/[A-Za-z0-9_.-]+|LICENSES/[A-Za-z0-9_.-]+)',name):
+                dest=site/name;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(z.read(name))
     deployment='<script>globalThis.PlayroomDeployment={catalogBasePath:new URL("./api/packs/",location.href).pathname};</script>'
     document=document.replace('<head>','<head>'+deployment+'<link rel="manifest" href="./manifest.webmanifest">',1)
     plain_hash=hashlib.sha256(document.encode()).hexdigest()
@@ -30,6 +30,8 @@ html=(site/'index.html').read_text()
 assert password not in html and 'class="game-tile' not in html
 # The existing worker owns update coordination. Only shell inventory and scope change.
 paths=['./index.html','./manifest.webmanifest']+['./'+p.relative_to(site).as_posix() for p in sorted((site/'icons').iterdir())]
+if (site/'platform/web/push-worker.js').is_file():paths.append('./platform/web/push-worker.js')
+assert "importScripts('./platform/web/push-worker.js')" not in worker or './platform/web/push-worker.js' in paths, 'Missing Push worker module'
 hashes={p:hashlib.sha256((site/p[2:]).read_bytes()).hexdigest() for p in paths}
 identity=hashlib.sha256(json.dumps(hashes,sort_keys=True).encode()).hexdigest()[:16]
 worker=re.sub(r"const CACHE='[^']+';", "const CACHE='playroom-pages-'+new URL('./',self.location.href).pathname+'-"+identity+"';",worker,count=1)
@@ -45,8 +47,14 @@ needle="      try{const response=await fetch(event.request);"
 assert needle in worker, 'Navigation integration point changed'
 if "if(local)return local;" not in worker: worker=worker.replace(needle,"      const local=await (await caches.open(CACHE)).match('./index.html');if(local)return local;\n"+needle,1)
 needle="    await Promise.all(entries.map(([path,response])=>cache.put(path,response)));"
-assert needle in worker, 'Install integration point changed'
-worker=worker.replace(needle,"    await Promise.all(entries.map(async([path,response])=>{if(path==='./index.html'&&isUnlockedShell(await cache.match(path)))return;await cache.put(path,response);}));",1)
+if needle in worker:
+    worker=worker.replace(needle,"    await Promise.all(entries.map(async([path,response])=>{if(path==='./index.html'&&isUnlockedShell(await cache.match(path)))return;await cache.put(path,response);}));",1)
+else:
+    # The staged downloader validates existing entries before fetching missing files.
+    # Its installed HTML may already be the verified, locally unlocked shell.
+    needle="async function validAsset(path,response){"
+    assert needle in worker, 'Install integration point changed'
+    worker=worker.replace(needle,needle+"\n  if(path==='./index.html'&&response?.ok&&isUnlockedShell(response)){const hash=await crypto.subtle.digest('SHA-256',await response.clone().arrayBuffer());return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,'0')).join('')===LOCAL_SHELL_HASH;}",1)
 worker+='\n'+(root/'scripts/local-shell-worker.js').read_text().replace('__LOCAL_SHELL_HASH__',plain_hash)
 (site/'sw.js').write_text(worker)
 (site/'build-info.json').write_text(json.dumps({'app':meta,'shell':identity,'localShell':{'sha256':plain_hash,'bytes':plain_size},'packs':json.loads((site/'api/packs/catalog').read_text())},ensure_ascii=False))

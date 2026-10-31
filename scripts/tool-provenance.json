@@ -1,10 +1,10 @@
 {
   "source": "GraphGiraffe/boardgame-playroom-utils/tools/github-pages",
   "sha256": {
-    "build.py": "40baa48c37e517aab19a3e5396b6928e0761a284204be1bce649f0114211e37b",
+    "build.py": "a4d6e5795bb13bd4525fcec933589f2f7893853e9d4be6473c153807704d884b",
     "seal-source.py": "9362f8f6d5b7f96d152ab98960012c0158cda652272637060558952803978579",
     "password-template.html": "1591e7125bf11377f878c7b8e9c82776d645e050d0d569e3f926d645a49a394d",
-    "smoke.cjs": "12fd0da0b5bfd76573da72346b4f31749a035951ccff4a003684698dbe0ba66e",
+    "smoke.cjs": "d02eeaf7c89c53659f9971bea7c3a8bb41bf900874ec2d7cb4bf23a55dfa8bd4",
     "local-shell-worker.js": "52b7072d52857faa2b3322e1568bc913cd4f9a0ce7d8bcb44213be6bc02f1fa8"
   }
 }

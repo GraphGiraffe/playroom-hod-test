@@ -65,7 +65,7 @@ const digest=b=>crypto.createHash('sha256').update(b).digest('hex');
     servedSite=path.resolve(process.env.SMOKE_NEXT_SITE);revision='';
     await page.evaluate(async()=>{await(await navigator.serviceWorker.ready).update();});
     await page.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration()).waiting);
-    await page.locator('[data-command=show-updates]').click();
+    if(!await page.locator('.updates-modal').isVisible())await page.locator('[data-command=show-updates]').click();
     await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}),page.locator('[data-command=update-app]').click()]);
     await page.locator('.game-tile').first().waitFor();
     const expectedHash=JSON.parse(fs.readFileSync(servedSite+'/build-info.json')).localShell.sha256;
