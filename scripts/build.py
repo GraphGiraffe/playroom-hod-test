@@ -35,7 +35,12 @@ assert "importScripts('./platform/web/push-worker.js')" not in worker or './plat
 hashes={p:hashlib.sha256((site/p[2:]).read_bytes()).hexdigest() for p in paths}
 identity=hashlib.sha256(json.dumps(hashes,sort_keys=True).encode()).hexdigest()[:16]
 worker=re.sub(r"const CACHE='[^']+';", "const CACHE='playroom-pages-'+new URL('./',self.location.href).pathname+'-"+identity+"';",worker,count=1)
-worker=worker.replace('const INTEGRITY=null;', 'const INTEGRITY='+json.dumps(hashes)+';')
+# Source workers may already carry hashes for the unencrypted PWA. Replace
+# that map too: the ciphertext and published manifest have different bytes.
+worker,replaced=re.subn(r'const INTEGRITY=(?:null|\{.*?\});',lambda _: 'const INTEGRITY='+json.dumps(hashes)+';',worker,count=1,flags=re.S)
+assert replaced==1, 'Worker integrity declaration changed'
+# Staged workers report progress from this map; ciphertext is larger than input.
+worker=re.sub(r'const ASSET_SIZES=\{.*?\};',lambda _: 'const ASSET_SIZES='+json.dumps({p:(site/p[2:]).stat().st_size for p in paths})+';',worker,count=1,flags=re.S)
 worker=re.sub(r'const CORE=\[.*?\];','const CORE='+json.dumps(paths)+';',worker,count=1,flags=re.S)
 worker=worker.replace("key.startsWith('playroom-pwa-')", "key.startsWith('playroom-pages-'+new URL('./',self.location.href).pathname+'-')")
 worker=worker.replace("url.pathname.startsWith('/api/packs/')", "url.pathname.startsWith(new URL('./api/packs/',self.location.href).pathname)")
