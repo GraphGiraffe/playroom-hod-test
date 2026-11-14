@@ -2,6 +2,19 @@
 const fs=require('node:fs'),http=require('node:http'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
 const {chromium}=require('playwright-core');const root=path.resolve(__dirname,'..'),site=path.join(root,'site');
 const digest=b=>crypto.createHash('sha256').update(b).digest('hex');
+
+async function activateUpdateThroughUi(page){
+ if(await page.locator('[data-command=update-all]').count()){
+  await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}),page.locator('[data-command=update-all]').click()]);return;
+ }
+ if(await page.evaluate(()=>PlayroomPWA.updateInfo?.download?.phase!=='ready')){
+  await page.locator('[data-command=download-app]').click();
+  await page.waitForFunction(()=>['ready','paused'].includes(PlayroomPWA.updateInfo?.download?.phase),null,{timeout:90000});
+  assert.equal(await page.evaluate(()=>PlayroomPWA.updateInfo.download.phase),'ready','Legacy download must finish before activation');
+ }
+ await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}),page.locator('[data-command=update-app]').click()]);
+}
+
 (async()=>{
  const password=process.env.PAGES_SMOKE_PASSWORD;assert(password);let revision='',slowDocuments=false,documentRequests=0;let servedSite=site;
  const server=http.createServer((req,res)=>{
@@ -57,7 +70,7 @@ const digest=b=>crypto.createHash('sha256').update(b).digest('hex');
    await page.evaluate(async()=>{await (await navigator.serviceWorker.ready).update();});
    await page.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration()).waiting);
    await page.locator('.updates-modal').waitFor({state:'visible'});
-   await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}),page.locator('[data-command=update-app]').click()]);
+   await activateUpdateThroughUi(page);
    await page.locator('.game-tile').first().waitFor();
    assert.equal((decryptCounts.get(page)||0),0);
    report.checks.push('Same-build worker activation preserves plaintext and remembered key');
@@ -66,7 +79,7 @@ const digest=b=>crypto.createHash('sha256').update(b).digest('hex');
     await page.evaluate(async()=>{await(await navigator.serviceWorker.ready).update();});
     await page.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration()).waiting);
     if(!await page.locator('.updates-modal').isVisible())await page.locator('[data-command=show-updates]').click();
-    await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}),page.locator('[data-command=update-app]').click()]);
+    await activateUpdateThroughUi(page);
     await page.locator('.game-tile').first().waitFor();
     const expectedHash=JSON.parse(fs.readFileSync(servedSite+'/build-info.json')).localShell.sha256;
     await page.waitForFunction(async hash=>{for(const key of await caches.keys()){const r=await(await caches.open(key)).match('./index.html');if(r?.headers.get('X-Playroom-Local-Shell')===hash)return true;}return false;},expectedHash);
