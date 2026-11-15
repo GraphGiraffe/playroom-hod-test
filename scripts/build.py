@@ -14,6 +14,11 @@ with tempfile.TemporaryDirectory() as td:
     assert hashlib.sha256(archive.read_bytes()).hexdigest()==meta['sha256'], 'Source integrity mismatch'
     with zipfile.ZipFile(archive) as z:
         document=z.read('index.html').decode()
+        marker='globalThis.PlayroomInstalledPacks = '
+        if marker in document:
+            bundled, _ = json.JSONDecoder().raw_decode(document.split(marker, 1)[1])
+            if bundled:
+                raise ValueError('Pages input must use playroom.html without bundled games; install packs from the catalog')
         worker=z.read('sw.js').decode()
         for name in z.namelist():
             if name in {'manifest.webmanifest','LICENSE','LICENSING.md','COPYRIGHT','platform/web/push-worker.js'} or re.fullmatch(r'(?:icons/[A-Za-z0-9_.-]+|LICENSES/[A-Za-z0-9_.-]+)',name):
