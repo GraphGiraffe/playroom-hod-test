@@ -34,15 +34,30 @@ async function activateUpdateThroughUi(page){
   const decryptCounts=new WeakMap();
   await ctx.exposeBinding('__recordDecrypt',({page})=>decryptCounts.set(page,(decryptCounts.get(page)||0)+1));
   await ctx.addInitScript(()=>{const decrypt=crypto.subtle.decrypt.bind(crypto.subtle);crypto.subtle.decrypt=async(...args)=>{await window.__recordDecrypt();return decrypt(...args);};});
-  const page=await ctx.newPage();page.on('pageerror',e=>report.errors.push(e.message));
+  let page=await ctx.newPage();page.on('pageerror',e=>report.errors.push(e.message));
   const url=process.env.SITE_URL||`http://127.0.0.1:${server.address().port}/playroom-preview/`;
+  const reopenAfterWaitingWorker=async()=>{
+   const workers=ctx.serviceWorkers();assert(workers.length,'service worker is present');
+   const activated=Promise.any(workers.map(worker=>worker.evaluate(()=>new Promise(resolve=>{const waiting=self.registration.waiting;if(!waiting||waiting.state==='activated')return resolve();waiting.addEventListener('statechange',()=>{if(waiting.state==='activated')resolve();});}))));
+   await page.close();await activated;page=await ctx.newPage();page.on('pageerror',e=>report.errors.push(e.message));await page.goto(url);
+  };
   const response=await ctx.request.get(url);assert.equal(response.status(),200);assert.equal(digest(await response.body()),digest(fs.readFileSync(site+'/index.html')));
   report.checks.push('Published encrypted bytes match build');
   await page.goto(url);await page.locator('#staticrypt-password').waitFor({state:'visible'});
   assert.equal(await page.locator('.game-tile').count(),0);
   await page.locator('#staticrypt-password').fill('wrong-'+crypto.randomUUID());await page.locator('input[type=submit]').click();await page.getByText('Неверный пароль',{exact:true}).waitFor();
   report.checks.push('Wrong password rejected; app absent before login');
-  await page.locator('#staticrypt-password').fill(password);await page.locator('input[type=submit]').click();await page.locator('.game-tile').first().waitFor();
+  await page.locator('#staticrypt-password').fill(password);await page.locator('input[type=submit]').click();
+  await page.waitForFunction(()=>!!globalThis.PlayroomAppBridge);
+  if(await page.locator('.packs-empty-hub').count()){
+   assert.equal(await page.evaluate(()=>PlayroomInstalledPacks.length),0);
+   await page.locator('.packs-empty-hub [data-command=packs]').click();
+   await page.locator('[data-pack-install-all]').click();
+   await page.locator('[data-pack-install-all]').filter({hasText:'Все игры установлены'}).waitFor({timeout:90000});
+   await page.locator('.pack-manager-modal .modal-head [data-command=close-modal]').click();
+   report.checks.push('Empty shell installs all games through the native catalog UI');
+  }
+  await page.locator('.game-tile').first().waitFor();
   assert.equal((decryptCounts.get(page)||0),1);
   const expected=JSON.parse(fs.readFileSync(site+'/api/packs/catalog')).packs;
   const ids=await page.locator('.game-tile').evaluateAll(nodes=>nodes.map(n=>n.dataset.game).sort());assert.deepEqual(ids,expected.map(p=>p.id).sort());
@@ -58,7 +73,7 @@ async function activateUpdateThroughUi(page){
   report.checks.push('Reload launches verified plaintext without decryption');
   const forged=await page.evaluate(()=>new Promise(resolve=>{const channel=new MessageChannel();channel.port1.onmessage=e=>{channel.port1.close();resolve(e.data.ok);};navigator.serviceWorker.controller.postMessage({kind:'playroom-store-local-shell',html:'<script>invalid</script>'},[channel.port2]);}));assert.equal(forged,false);
   report.checks.push('Worker rejects HTML that does not match build hash');
-  const state=await ctx.storageState();assert(state.origins.some(o=>o.localStorage.some(i=>i.name.endsWith(':key')&&i.value!==password)));
+  const state=await ctx.storageState({indexedDB:true});assert(state.origins.some(o=>o.localStorage.some(i=>i.name.endsWith(':key')&&i.value!==password)));
   const resumed=await browser.newContext({storageState:state}),again=await resumed.newPage();await again.goto(url);await again.locator('.game-tile').first().waitFor();await resumed.close();
   report.checks.push('Remembered key survives reload and new browser context');
   if(!process.env.SITE_URL){
@@ -69,8 +84,7 @@ async function activateUpdateThroughUi(page){
    revision='\n// smoke update revision\n';
    await page.evaluate(async()=>{await (await navigator.serviceWorker.ready).update();});
    await page.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration()).waiting);
-   await page.locator('.updates-modal').waitFor({state:'visible'});
-   await activateUpdateThroughUi(page);
+   await reopenAfterWaitingWorker();
    await page.locator('.game-tile').first().waitFor();
    assert.equal((decryptCounts.get(page)||0),0);
    report.checks.push('Same-build worker activation preserves plaintext and remembered key');
@@ -78,9 +92,15 @@ async function activateUpdateThroughUi(page){
     servedSite=path.resolve(process.env.SMOKE_NEXT_SITE);revision='';
     await page.evaluate(async()=>{await(await navigator.serviceWorker.ready).update();});
     await page.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration()).waiting);
-    if(!await page.locator('.updates-modal').isVisible())await page.locator('[data-command=show-updates]').click();
-    await activateUpdateThroughUi(page);
+    const sameVersion=JSON.parse(fs.readFileSync(site+'/build-info.json')).app.version===JSON.parse(fs.readFileSync(servedSite+'/build-info.json')).app.version;
+    const save=await page.evaluate(async()=>{const session=new TabletopSession(TabletopCore,'tictactoe',{seed:17,players:[{name:'A'},{name:'B'}]});await PlayroomAppBridge.saveLibrary.activateAsync(session,'shell-upgrade-save');return JSON.stringify(session.export());});
+    if(sameVersion){
+     await reopenAfterWaitingWorker();
+     report.checks.push('Same-version packaging update activates after all app windows close');
+    }else{if(!await page.locator('.updates-modal').isVisible())await page.locator('[data-command=show-updates]:visible').first().click();await activateUpdateThroughUi(page);}
     await page.locator('.game-tile').first().waitFor();
+    assert.equal(await page.evaluate(()=>JSON.stringify(PlayroomAppBridge.saveLibrary.open('shell-upgrade-save').export())),save);
+    report.checks.push('Update retains the exact saved game and installed packs');
     const expectedHash=JSON.parse(fs.readFileSync(servedSite+'/build-info.json')).localShell.sha256;
     await page.waitForFunction(async hash=>{for(const key of await caches.keys()){const r=await(await caches.open(key)).match('./index.html');if(r?.headers.get('X-Playroom-Local-Shell')===hash)return true;}return false;},expectedHash);
     assert.equal((decryptCounts.get(page)||0),1);
