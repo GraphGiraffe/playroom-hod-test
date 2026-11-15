@@ -13,7 +13,7 @@
 
 ## Подготовка и публикация
 
-Канонические инструменты и подробный порядок: [GitHub Pages](https://github.com/GraphGiraffe/boardgame-playroom-utils/blob/main/docs/GITHUB-PAGES.md). Копии в `scripts/` экспортируются из utils; `scripts/tool-provenance.json` содержит их контрольные суммы. Изменяйте канонические инструменты, затем синхронизируйте копии.
+Скрипты подготовки зашифрованного сайта находятся в `scripts/`; их происхождение и SHA256 записаны в `scripts/tool-provenance.json`. Приложение публикуется как отдельная оболочка, а игры устанавливаются из каталога — без GitHub Releases приложения или коллекции.
 
 Публикация запускается вручную через **Actions → Publish encrypted PlayRoom** на `main`. Push и PR не публикуют сайт. Workflow собирает и публикует зашифрованные файлы; браузерную приёмку выполняйте локально.
 
@@ -21,6 +21,6 @@
 
 Обновления каталога сохраняют прежние хешированные файлы для старых партий. Изменения готовятся через PR в `dev`, затем объединяются в `main`. Обе ветки синхронизируются; публикация остаётся ручной из `main`.
 
-[Исходники приложения](https://github.com/GraphGiraffe/boardgame-playroom) · [коллекция игр](https://github.com/GraphGiraffe/boardgame-playroom-paks) · [инструменты](https://github.com/GraphGiraffe/boardgame-playroom-utils).
+[Исходники приложения](https://github.com/GraphGiraffe/boardgame-playroom) · [коллекция игр](https://github.com/GraphGiraffe/boardgame-playroom-paks).
 
 Условия использования и исключения: [LICENSING](LICENSING.md), [LICENSE](LICENSE).
