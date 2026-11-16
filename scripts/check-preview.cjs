@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict'),crypto=require('node:crypto');
-const {chromium}=require('playwright-core');
+const {chromium,devices}=require('playwright-core');
 const previewPath='/playroom-hod-test/api/packs/preview/kalyakodil/',mount='api/packs/preview/kalyakodil';
 const root=path.resolve(__dirname,'..'),prefix='playroom-preview:kalyakodil:v1:',checks=[],errors=[];
 const digest=b=>crypto.createHash('sha256').update(b).digest('hex');
@@ -18,7 +18,7 @@ const digest=b=>crypto.createHash('sha256').update(b).digest('hex');
  await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
  try{
   browser=await chromium.launch({headless:true,...(process.env.CHROME_BIN?{executablePath:process.env.CHROME_BIN}:{})});
-  const context=await browser.newContext({viewport:{width:1000,height:850}}),page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+  const context=await browser.newContext(process.env.PREVIEW_PHONE?devices['Pixel 7']:{viewport:{width:1000,height:850}}),page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
   const base=`http://127.0.0.1:${server.address().port}`,local=base+previewPath;
   await page.goto(base+'/production/');await page.evaluate(async()=>{
    localStorage.setItem('preview-sentinel','keep');sessionStorage.setItem('preview-sentinel','keep');
@@ -38,10 +38,12 @@ const digest=b=>crypto.createHash('sha256').update(b).digest('hex');
    const db=await new Promise(resolve=>{const r=indexedDB.open('playroom.data.v1');r.onsuccess=()=>resolve(r.result);});const record=await new Promise(resolve=>{db.transaction('sentinel').objectStore('sentinel').get('key').onsuccess=e=>resolve(e.target.result);});db.close();
    return [localStorage.getItem('preview-sentinel'),sessionStorage.getItem('preview-sentinel'),record,await(await(await caches.open('playroom-pages-/production/-sentinel')).match('/production/sentinel')).text()];
   }),['keep','keep','keep','keep']);checks.push('Preview storage clear/delete leaves same-origin production local/session/IDB/cache sentinels unchanged');
+  await context.addInitScript(()=>{let Constructor;window.__previewDataStarts=0;Object.defineProperty(window,'PlayroomDataStorage',{configurable:true,get:()=>Constructor,set:value=>{Constructor=class extends value{constructor(...args){super(...args);window.__previewDataStarts++;}};}});});
   await context.addInitScript(({prefix})=>{localStorage.setItem(prefix+'playroom.player-profile.v1',JSON.stringify({version:1,id:'preview-check',name:'Тест',createdAt:1,updatedAt:1}));},{prefix});
   const url=process.env.SITE_URL||local;
   await page.goto(url);await page.locator('#staticrypt-password').waitFor();await page.locator('#staticrypt-password').fill('wrong-password');await page.locator('input[type=submit]').click();await page.getByText('Неверный пароль',{exact:true}).waitFor();
-  await page.locator('#staticrypt-password').fill(password);await page.locator('input[type=submit]').click();await page.waitForFunction(()=>!!globalThis.PlayroomAppBridge);
+  await page.locator('#staticrypt-password').fill(password);await page.evaluate(()=>{const form=document.querySelector('form');form.requestSubmit();form.requestSubmit();});await page.waitForFunction(()=>!!globalThis.PlayroomAppBridge);
+  assert.equal(await page.evaluate(()=>window.__previewDataStarts),1,'one login must initialize the application once');checks.push('Repeated password submit initializes only one application/data store');
   checks.push('Password gate rejects wrong password and opens the normal isolated SDK app');
   if(await page.locator('.packs-empty-hub').count()){
    await page.locator('.packs-empty-hub [data-command=packs]').click();await page.locator('[data-pack-install-all]').click();await page.locator('[data-pack-install-all]').filter({hasText:'Все игры установлены'}).waitFor({timeout:90000});await page.locator('.pack-manager-modal .modal-head [data-command=close-modal]').click();
