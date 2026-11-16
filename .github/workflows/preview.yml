@@ -1,0 +1,42 @@
+name: Publish Kalyakodil preview only
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --omit=dev
+      - name: Fetch the exact currently published stable files
+        run: python3 scripts/preview.py fetch-base --baseline previews/kalyakodil/baseline.json --output site
+      - name: Append the isolated preview using the existing visitor password
+        run: python3 scripts/preview.py build --site . --profile kalyakodil --output site/api/packs/preview/kalyakodil
+        env:
+          PAGES_SMOKE_PASSWORD: ${{ secrets.PAGES_SMOKE_PASSWORD }}
+          SOURCE_BUNDLE_KEY: ${{ secrets.PREVIEW_KALYAKODIL_SOURCE_KEY }}
+      - name: Refuse any change outside this preview
+        run: python3 scripts/preview.py verify --site . --profile kalyakodil --output site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4
+        id: deployment
