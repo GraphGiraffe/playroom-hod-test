@@ -30,12 +30,6 @@ jobs:
         env:
           PAGES_SMOKE_PASSWORD: ${{ secrets.PAGES_SMOKE_PASSWORD }}
           SOURCE_BUNDLE_KEY: ${{ secrets.SOURCE_BUNDLE_KEY }}
-      - name: Include the separate review preview
-        if: hashFiles('previews/kalyakodil/profile.json') != ''
-        run: python3 scripts/preview.py build --site . --profile kalyakodil --output site/api/packs/preview/kalyakodil
-        env:
-          PAGES_SMOKE_PASSWORD: ${{ secrets.PAGES_SMOKE_PASSWORD }}
-          SOURCE_BUNDLE_KEY: ${{ secrets.PREVIEW_KALYAKODIL_SOURCE_KEY }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

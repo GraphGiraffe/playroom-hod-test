@@ -5,8 +5,6 @@
     "seal-source.py": "9362f8f6d5b7f96d152ab98960012c0158cda652272637060558952803978579",
     "password-template.html": "7a30f06136224fa1b0dd355b456e91897fda6d56a987e8fda78956101fe37413",
     "smoke.cjs": "45fb1dca36e21d0e3ccf1f46cb129288d8cc1a4859780b9e4fcb725b7302576e",
-    "local-shell-worker.js": "52b7072d52857faa2b3322e1568bc913cd4f9a0ce7d8bcb44213be6bc02f1fa8",
-    "preview.py": "f97e7502aee35c460f36e3ab5c5015e311b2432b4f94e6d73bf19200f085ade1",
-    "preview-storage.js": "55ad43d86181f4bcfe7efc7045283a3448977fcfd00ebefacf8af5dd161b0f8c"
+    "local-shell-worker.js": "52b7072d52857faa2b3322e1568bc913cd4f9a0ce7d8bcb44213be6bc02f1fa8"
   }
 }

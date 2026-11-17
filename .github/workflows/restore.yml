@@ -1,0 +1,64 @@
+name: Restore a published Pages artifact
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful deployment run in this repository
+        required: true
+      archive_sha256:
+        description: Reviewed SHA256 of its github-pages artifact.tar
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  restore:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Fetch and verify the exact prior deployment artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_RUN: ${{ inputs.run_id }}
+          ARCHIVE_SHA256: ${{ inputs.archive_sha256 }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, re, subprocess, tarfile
+          run = os.environ['SOURCE_RUN']
+          expected = os.environ['ARCHIVE_SHA256']
+          assert re.fullmatch(r'[1-9][0-9]*', run), 'Invalid run ID'
+          assert re.fullmatch(r'[a-f0-9]{64}', expected), 'Invalid archive SHA256'
+          info = json.loads(subprocess.check_output(['gh', 'api', 'repos/' + os.environ['GH_REPO'] + '/actions/runs/' + run]))
+          assert info['conclusion'] == 'success' and info['head_branch'] == 'main', 'Expected a successful main deployment'
+          assert info['path'] in ('.github/workflows/pages.yml', '.github/workflows/preview.yml', '.github/workflows/restore.yml'), 'Expected a Pages publication workflow'
+          subprocess.run(['gh', 'run', 'download', run, '--name', 'github-pages', '--dir', 'downloaded'], check=True)
+          archive = pathlib.Path('downloaded/artifact.tar')
+          assert hashlib.sha256(archive.read_bytes()).hexdigest() == expected, 'Artifact SHA256 changed'
+          output = pathlib.Path('site')
+          output.mkdir()
+          with tarfile.open(archive) as bundle:
+              members = bundle.getmembers()
+              assert all(m.isfile() or m.isdir() for m in members), 'Links or special files in artifact'
+              assert all(not pathlib.PurePosixPath(m.name).is_absolute() and '..' not in pathlib.PurePosixPath(m.name).parts for m in members), 'Unsafe artifact path'
+              bundle.extractall(output, filter='data')
+          assert all((output / name).is_file() for name in ['index.html', 'sw.js', 'manifest.webmanifest']), 'Incomplete site'
+          files = [p for p in output.rglob('*') if p.is_file()]
+          print('Verified prior site:', len(files), 'files;', sum(p.stat().st_size for p in files), 'bytes')
+          PY
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4
+        id: deployment
