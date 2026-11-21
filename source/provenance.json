@@ -1,5 +1,6 @@
 {
-  "version": "0.21.0",
+  "version": "0.21.1",
   "artifact": "current-input.zip",
-  "sha256": "9a4f735fe385e68cbfd3a182693fe590be689cac047f48f336fb1a023e2aff90"
+  "sha256": "da540b4b75c66f488ff07f719b3ae72eb63984850a54480b97e815fec55c4ce3",
+  "sourceCommit": "7cb953d2408dbb2347fd117896f147c80429f75e"
 }
